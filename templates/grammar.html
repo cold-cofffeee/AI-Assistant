@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grammar & Style Checker - AI Writing Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📝 Grammar & Style Checker</h1>
+            <nav class="breadcrumb">
+                <a href="/">← Back to Home</a>
+            </nav>
+        </header>
+
+        <main class="tool-main">
+            <div class="input-section">
+                <h2>Enter Your Text</h2>
+                <textarea id="inputText" placeholder="Type or paste your text here to check for grammar and style issues..."></textarea>
+                <button id="checkBtn" class="primary-btn">Check Grammar & Style</button>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h2>Suggestions & Corrections</h2>
+                <div id="grammarResult" class="result-box grammar-result"></div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Analyzing your text...</p>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.getElementById('checkBtn').addEventListener('click', async function() {
+            const text = document.getElementById('inputText').value.trim();
+            
+            if (!text) {
+                showError('Please enter some text to check.');
+                return;
+            }
+
+            showLoading();
+            hideError();
+            hideOutput();
+
+            try {
+                const response = await fetch('/api/grammar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Format the suggestions with proper line breaks
+                    const formattedSuggestions = data.suggestions.replace(/\n/g, '<br>');
+                    document.getElementById('grammarResult').innerHTML = formattedSuggestions;
+                    showOutput();
+                } else {
+                    showError(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showOutput() {
+            document.getElementById('outputSection').style.display = 'block';
+        }
+
+        function hideOutput() {
+            document.getElementById('outputSection').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

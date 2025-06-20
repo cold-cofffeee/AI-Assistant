@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Summarizer - AI Writing Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Text Summarizer</h1>
+            <nav class="breadcrumb">
+                <a href="/">← Back to Home</a>
+            </nav>
+        </header>
+
+        <main class="tool-main">
+            <div class="input-section">
+                <h2>Enter Your Text</h2>
+                <textarea id="inputText" placeholder="Paste your long article or text here to get a concise summary..."></textarea>
+                <button id="summarizeBtn" class="primary-btn">Summarize Text</button>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h2>Summary</h2>
+                <div id="summaryResult" class="result-box"></div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating summary...</p>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.getElementById('summarizeBtn').addEventListener('click', async function() {
+            const text = document.getElementById('inputText').value.trim();
+            
+            if (!text) {
+                showError('Please enter some text to summarize.');
+                return;
+            }
+
+            showLoading();
+            hideError();
+            hideOutput();
+
+            try {
+                const response = await fetch('/api/summarize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('summaryResult').textContent = data.summary;
+                    showOutput();
+                } else {
+                    showError(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showOutput() {
+            document.getElementById('outputSection').style.display = 'block';
+        }
+
+        function hideOutput() {
+            document.getElementById('outputSection').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

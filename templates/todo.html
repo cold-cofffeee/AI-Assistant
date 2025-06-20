@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart To-Do List - AI Writing Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📆 Smart To-Do List Generator</h1>
+            <nav class="breadcrumb">
+                <a href="/">← Back to Home</a>
+            </nav>
+        </header>
+
+        <main class="tool-main">
+            <div class="input-section">
+                <h2>Enter Your Goal</h2>
+                <input type="text" id="goalInput" placeholder="e.g., Study for exams next week, Plan a birthday party, Learn a new skill..." />
+                <button id="generateBtn" class="primary-btn">Generate To-Do List</button>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h2>Your Smart To-Do List</h2>
+                <div class="todo-stats" id="todoStats"></div>
+                <div id="todoContainer" class="todo-list"></div>
+                <button id="clearCompleted" class="secondary-btn">Clear Completed Tasks</button>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Creating your personalized to-do list...</p>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        let tasks = [];
+
+        document.getElementById('generateBtn').addEventListener('click', generateTodoList);
+        document.getElementById('goalInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                generateTodoList();
+            }
+        });
+
+        document.getElementById('clearCompleted').addEventListener('click', function() {
+            tasks = tasks.filter(task => !task.completed);
+            displayTasks();
+            updateStats();
+        });
+
+        async function generateTodoList() {
+            const goal = document.getElementById('goalInput').value.trim();
+            
+            if (!goal) {
+                showError('Please enter a goal to generate a to-do list.');
+                return;
+            }
+
+            showLoading();
+            hideError();
+            hideOutput();
+
+            try {
+                const response = await fetch('/api/todo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ goal: goal })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    tasks = data.tasks.map((task, index) => ({
+                        id: index,
+                        task: task.task,
+                        time: task.time,
+                        completed: false
+                    }));
+                    displayTasks();
+                    updateStats();
+                    showOutput();
+                } else {
+                    showError(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayTasks() {
+            const container = document.getElementById('todoContainer');
+            container.innerHTML = '';
+
+            tasks.forEach((taskObj) => {
+                const taskItem = document.createElement('div');
+                taskItem.className = `todo-item ${taskObj.completed ? 'completed' : ''}`;
+                taskItem.innerHTML = `
+                    <label class="checkbox-container">
+                        <input type="checkbox" ${taskObj.completed ? 'checked' : ''} 
+                               onchange="toggleTask(${taskObj.id})">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="task-content">
+                        <span class="task-text">${taskObj.task}</span>
+                        <span class="task-time">⏱️ ${taskObj.time}</span>
+                    </div>
+                `;
+                container.appendChild(taskItem);
+            });
+        }
+
+        function toggleTask(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if (task) {
+                task.completed = !task.completed;
+                displayTasks();
+                updateStats();
+            }
+        }
+
+        function updateStats() {
+            const completed = tasks.filter(t => t.completed).length;
+            const total = tasks.length;
+            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+            
+            document.getElementById('todoStats').innerHTML = `
+                <div class="stats">
+                    <span class="stat">
+                        <strong>${completed}</strong> of <strong>${total}</strong> tasks completed
+                    </span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${percentage}%"></div>
+                    </div>
+                    <span class="percentage">${percentage}%</span>
+                </div>
+            `;
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showOutput() {
+            document.getElementById('outputSection').style.display = 'block';
+        }
+
+        function hideOutput() {
+            document.getElementById('outputSection').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
