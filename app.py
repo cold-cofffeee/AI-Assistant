@@ -5,8 +5,11 @@ import hashlib
 import os
 from datetime import datetime, timedelta
 import re
+import random
+from faker import Faker
 
 app = Flask(__name__)
+fake = Faker()
 
 # Configuration
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'your_api_')
@@ -30,6 +33,27 @@ def get_cache_key(text, feature):
     """Generate cache key from text and feature"""
     combined = f"{feature}:{text}"
     return hashlib.md5(combined.encode()).hexdigest()
+
+def get_cached_response(cache_key):
+    """Return cached response if entry exists and is valid"""
+    cache = load_cache()
+    entry = cache.get(cache_key)
+
+    if entry and 'timestamp' in entry and is_cache_valid(entry['timestamp']):
+        return entry.get('response')
+
+    return None
+
+def save_cached_response(cache_key, tool, query, response):
+    """Store response and metadata in cache"""
+    cache = load_cache()
+    cache[cache_key] = {
+        'tool': tool,
+        'query': query,
+        'response': response,
+        'timestamp': datetime.now().isoformat()
+    }
+    save_cache(cache)
 
 def is_cache_valid(timestamp):
     """Check if cache entry is less than 24 hours old"""
@@ -67,23 +91,17 @@ def call_gemini_api(prompt):
 
 def get_ai_response(text, feature, prompt_template):
     """Get AI response with caching"""
-    # Check cache first
-    cache = load_cache()
     cache_key = get_cache_key(text, feature)
-    
-    if cache_key in cache and is_cache_valid(cache[cache_key]['timestamp']):
-        return cache[cache_key]['response']
+
+    cached_response = get_cached_response(cache_key)
+    if cached_response is not None:
+        return cached_response
     
     # Make API call
     prompt = prompt_template.format(text=text)
     response = call_gemini_api(prompt)
     
-    # Save to cache
-    cache[cache_key] = {
-        'response': response,
-        'timestamp': datetime.now().isoformat()
-    }
-    save_cache(cache)
+    save_cached_response(cache_key, feature, text, response)
     
     return response
 
@@ -190,6 +208,87 @@ def api_ideas():
 def todo():
     """Smart to-do list page"""
     return render_template('todo.html')
+
+@app.route('/fake-profile')
+def fake_profile():
+    """Fake profile generator page"""
+    return render_template('fake_profile.html')
+
+def build_fake_profile(age=None, gender=None, country=None):
+    """Generate a single fake profile"""
+    selected_gender = gender if gender in ['male', 'female'] else random.choice(['male', 'female'])
+    selected_age = age if age and age > 0 else random.randint(18, 70)
+    children_count = random.randint(0, 3)
+
+    return {
+        'name': fake.name_male() if selected_gender == 'male' else fake.name_female(),
+        'email': fake.email(),
+        'phone': fake.phone_number(),
+        'address': {
+            'street': fake.street_address(),
+            'city': fake.city(),
+            'state': fake.state(),
+            'zip': fake.zipcode(),
+            'country': country if country else fake.country()
+        },
+        'geo': {
+            'lat': float(fake.latitude()),
+            'lng': float(fake.longitude())
+        },
+        'dob': fake.date_of_birth(minimum_age=selected_age, maximum_age=selected_age).isoformat(),
+        'gender': selected_gender,
+        'education': random.choice(['High School', "Bachelor's", "Master's", 'PhD']),
+        'family': {
+            'spouse': fake.name(),
+            'children': [fake.first_name() for _ in range(children_count)]
+        }
+    }
+
+@app.route('/api/fake-profile', methods=['POST'])
+def api_fake_profile():
+    """API endpoint for fake profile generation"""
+    data = request.get_json() or {}
+    age = data.get('age')
+    gender = (data.get('gender') or '').strip().lower()
+    country = (data.get('country') or '').strip()
+    count = data.get('count', 1)
+
+    try:
+        age = int(age) if age not in [None, ''] else None
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Age must be a valid number'}), 400
+
+    if age is not None and (age < 1 or age > 100):
+        return jsonify({'error': 'Age must be between 1 and 100'}), 400
+
+    if gender and gender not in ['male', 'female']:
+        return jsonify({'error': 'Gender must be male or female'}), 400
+
+    try:
+        count = int(count)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Count must be a valid number'}), 400
+
+    if count < 1 or count > 20:
+        return jsonify({'error': 'Count must be between 1 and 20'}), 400
+
+    cache_payload = {
+        'age': age,
+        'gender': gender if gender else None,
+        'country': country if country else None,
+        'count': count
+    }
+    cache_text = json.dumps(cache_payload, sort_keys=True)
+    cache_key = get_cache_key(cache_text, 'fake_profile')
+
+    cached_profiles = get_cached_response(cache_key)
+    if cached_profiles is not None:
+        return jsonify({'profiles': cached_profiles})
+
+    profiles = [build_fake_profile(age=age, gender=gender if gender else None, country=country if country else None) for _ in range(count)]
+    save_cached_response(cache_key, 'fake_profile', cache_payload, profiles)
+
+    return jsonify({'profiles': profiles})
 
 @app.route('/api/todo', methods=['POST'])
 def api_todo():

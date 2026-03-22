@@ -1,11 +1,12 @@
 # AI Writing Assistant
 
-A Flask-based web application that provides four AI-powered writing tools using Google's Gemini API:
+A Flask-based web application that provides AI-powered writing tools using Google's Gemini API, plus a fake profile generator:
 
 - 🔍 **Text Summarizer**: Condense long articles into concise summaries
 - 📝 **Grammar & Style Checker**: Get AI-powered writing improvement suggestions
 - 💡 **Idea Generator**: Generate creative ideas for any topic
 - 📆 **Smart To-Do List**: Create structured task lists with time estimates
+- 🧑 **Fake Profile Generator**: Generate realistic mock user profiles for testing and demos
 
 ## Features
 
@@ -15,6 +16,7 @@ A Flask-based web application that provides four AI-powered writing tools using 
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 - **Real-time Interaction**: Dynamic loading states and error handling
 - **Interactive To-Do Lists**: Checkboxes with progress tracking
+- **Fake Data Generation**: Configurable profile generation by age, gender, country, and count
 
 ## Setup Instructions
 
@@ -34,7 +36,8 @@ A Flask-based web application that provides four AI-powered writing tools using 
    │   ├── summarizer.html
    │   ├── grammar.html
    │   ├── ideas.html
-   │   └── todo.html
+   │   ├── todo.html
+   │   └── fake_profile.html
    ├── static/
    │   ├── style.css
    │   └── script.js
@@ -44,7 +47,7 @@ A Flask-based web application that provides four AI-powered writing tools using 
 
 2. **Install required Python packages**:
    ```bash
-   pip install flask requests
+   pip install flask requests faker
    ```
 
 3. **Get your Gemini API key**:
@@ -111,6 +114,13 @@ A Flask-based web application that provides four AI-powered writing tools using 
 4. Check off tasks as you complete them
 5. View progress statistics
 
+### Fake Profile Generator
+1. Open the fake profile generator page
+2. Optionally set age, gender, and country
+3. Set the number of profiles (1-20)
+4. Click "Generate Profiles"
+5. Review the generated profile objects
+
 ## Technical Details
 
 ### Caching System
@@ -133,7 +143,8 @@ templates/          # HTML templates
 ├── summarizer.html # Text summarizer interface
 ├── grammar.html    # Grammar checker interface
 ├── ideas.html      # Idea generator interface
-└── todo.html       # To-do list generator interface
+├── todo.html       # To-do list generator interface
+└── fake_profile.html # Fake profile generator interface
 static/             # Static assets
 ├── style.css       # Main stylesheet
 └── script.js       # JavaScript utilities
@@ -168,7 +179,7 @@ README.md           # This file
    - Verify the environment variable is set correctly
 
 2. **Import Errors**:
-   - Make sure Flask and requests are installed: `pip install flask requests`
+   - Make sure Flask, requests, and Faker are installed: `pip install flask requests faker`
    - Check Python version compatibility
 
 3. **Cache Issues**:

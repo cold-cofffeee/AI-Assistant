@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake Profile Generator - AI Writing Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧑 Fake Profile Generator</h1>
+            <nav class="breadcrumb">
+                <a href="/">← Back to Home</a>
+            </nav>
+        </header>
+
+        <main class="tool-main">
+            <div class="input-section">
+                <h2>Profile Settings</h2>
+                <div class="profile-controls">
+                    <input type="number" id="ageInput" min="1" max="100" placeholder="Age (optional)" />
+                    <select id="genderInput">
+                        <option value="">Any Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                    <input type="text" id="countryInput" placeholder="Country (optional)" />
+                    <input type="number" id="countInput" min="1" max="20" value="1" placeholder="Count (1-20)" />
+                </div>
+                <button id="generateBtn" class="primary-btn">Generate Profiles</button>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h2>Generated Profiles</h2>
+                <div id="profilesContainer" class="profiles-list"></div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating fake profiles...</p>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.getElementById('generateBtn').addEventListener('click', generateProfiles);
+
+        async function generateProfiles() {
+            const age = document.getElementById('ageInput').value.trim();
+            const gender = document.getElementById('genderInput').value;
+            const country = document.getElementById('countryInput').value.trim();
+            const count = document.getElementById('countInput').value.trim() || '1';
+
+            showLoading();
+            hideError();
+            hideOutput();
+
+            try {
+                const response = await fetch('/api/fake-profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ age, gender, country, count })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayProfiles(data.profiles);
+                    showOutput();
+                } else {
+                    showError(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayProfiles(profiles) {
+            const container = document.getElementById('profilesContainer');
+            container.innerHTML = '';
+
+            profiles.forEach((profile, index) => {
+                const profileCard = document.createElement('div');
+                profileCard.className = 'profile-card';
+                profileCard.innerHTML = `
+                    <h3>Profile ${index + 1}</h3>
+                    <div class="result-box profile-result">${JSON.stringify(profile, null, 2)}</div>
+                `;
+                container.appendChild(profileCard);
+            });
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showOutput() {
+            document.getElementById('outputSection').style.display = 'block';
+        }
+
+        function hideOutput() {
+            document.getElementById('outputSection').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
