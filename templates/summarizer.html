@@ -62,7 +62,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    document.getElementById('summaryResult').textContent = data.summary;
+                    document.getElementById('summaryResult').innerHTML = renderAiOutput(data.summary);
                     showOutput();
                 } else {
                     showError(data.error || 'An error occurred');

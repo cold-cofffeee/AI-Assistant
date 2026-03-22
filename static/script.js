@@ -106,6 +106,107 @@ function formatText(text) {
         .replace(/$/, '</p>');
 }
 
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function applyInlineMarkdown(text) {
+    return text
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function renderAiOutput(text) {
+    if (!text) {
+        return '';
+    }
+
+    const normalized = String(text).replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    const htmlParts = [];
+    let inUnorderedList = false;
+    let inOrderedList = false;
+
+    const closeLists = () => {
+        if (inUnorderedList) {
+            htmlParts.push('</ul>');
+            inUnorderedList = false;
+        }
+        if (inOrderedList) {
+            htmlParts.push('</ol>');
+            inOrderedList = false;
+        }
+    };
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+            closeLists();
+            continue;
+        }
+
+        const safeLine = applyInlineMarkdown(escapeHtml(line));
+
+        if (line.startsWith('### ')) {
+            closeLists();
+            htmlParts.push(`<h3>${applyInlineMarkdown(escapeHtml(line.slice(4)))}</h3>`);
+            continue;
+        }
+
+        if (line.startsWith('## ')) {
+            closeLists();
+            htmlParts.push(`<h2>${applyInlineMarkdown(escapeHtml(line.slice(3)))}</h2>`);
+            continue;
+        }
+
+        if (line.startsWith('# ')) {
+            closeLists();
+            htmlParts.push(`<h1>${applyInlineMarkdown(escapeHtml(line.slice(2)))}</h1>`);
+            continue;
+        }
+
+        if (line.startsWith('- ') || line.startsWith('* ')) {
+            if (inOrderedList) {
+                htmlParts.push('</ol>');
+                inOrderedList = false;
+            }
+            if (!inUnorderedList) {
+                htmlParts.push('<ul>');
+                inUnorderedList = true;
+            }
+            htmlParts.push(`<li>${applyInlineMarkdown(escapeHtml(line.slice(2).trim()))}</li>`);
+            continue;
+        }
+
+        if (/^\d+\.\s+/.test(line)) {
+            if (inUnorderedList) {
+                htmlParts.push('</ul>');
+                inUnorderedList = false;
+            }
+            if (!inOrderedList) {
+                htmlParts.push('<ol>');
+                inOrderedList = true;
+            }
+            htmlParts.push(`<li>${applyInlineMarkdown(escapeHtml(line.replace(/^\d+\.\s+/, '')))}</li>`);
+            continue;
+        }
+
+        closeLists();
+        htmlParts.push(`<p>${safeLine}</p>`);
+    }
+
+    closeLists();
+    return htmlParts.join('');
+}
+
 // Copy text to clipboard
 async function copyToClipboard(text) {
     try {

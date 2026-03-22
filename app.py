@@ -6,15 +6,69 @@ import os
 from datetime import datetime, timedelta
 import re
 import random
+import tempfile
 from faker import Faker
+
+def load_local_env():
+    """Load environment variables from .env file if available."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        return
+    except Exception:
+        pass
+
+    env_path = '.env'
+    if not os.path.exists(env_path):
+        return
+
+    try:
+        with open(env_path, 'r', encoding='utf-8') as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        pass
+
+load_local_env()
 
 app = Flask(__name__)
 fake = Faker()
 
 # Configuration
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'your_api_')
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '').strip()
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest').strip()
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 CACHE_FILE = 'cache.json'
+MAX_INPUT_LENGTH = 10000
+
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024
+app.config['JSON_SORT_KEYS'] = False
+
+@app.after_request
+def apply_security_headers(response):
+    """Attach common security headers for browser protection."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    return response
+
+@app.errorhandler(413)
+def request_entity_too_large(_error):
+    return jsonify({'error': 'Request payload too large'}), 413
+
+@app.errorhandler(500)
+def internal_server_error(_error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 def load_cache():
     """Load cache from JSON file"""
@@ -26,8 +80,11 @@ def load_cache():
 
 def save_cache(cache_data):
     """Save cache to JSON file"""
-    with open(CACHE_FILE, 'w') as f:
-        json.dump(cache_data, f, indent=2)
+    with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8') as temp_file:
+        json.dump(cache_data, temp_file, indent=2)
+        temp_path = temp_file.name
+
+    os.replace(temp_path, CACHE_FILE)
 
 def get_cache_key(text, feature):
     """Generate cache key from text and feature"""
@@ -62,6 +119,9 @@ def is_cache_valid(timestamp):
 
 def call_gemini_api(prompt):
     """Make API call to Gemini"""
+    if not GEMINI_API_KEY:
+        return "API configuration error: GEMINI_API_KEY is missing"
+
     payload = {
         "contents": [
             {
@@ -75,22 +135,33 @@ def call_gemini_api(prompt):
     }
     
     headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-goog-api-key': GEMINI_API_KEY
     }
     
     try:
-        response = requests.post(GEMINI_URL, json=payload, headers=headers)
+        response = requests.post(GEMINI_URL, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         
         data = response.json()
         return data['candidates'][0]['content']['parts'][0]['text']
-    except requests.RequestException as e:
-        return f"API Error: {str(e)}"
-    except (KeyError, IndexError) as e:
-        return f"Response parsing error: {str(e)}"
+    except requests.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
+        if status_code in [401, 403]:
+            return "API error: invalid or unauthorized API key"
+        if status_code == 429:
+            return "API error: rate limit reached, please try again later"
+        return "API error: request to Gemini failed"
+    except requests.RequestException:
+        return "API error: failed to reach Gemini service"
+    except (KeyError, IndexError, ValueError):
+        return "API error: invalid response from Gemini service"
 
 def get_ai_response(text, feature, prompt_template):
     """Get AI response with caching"""
+    if len(text) > MAX_INPUT_LENGTH:
+        return f"Input too long. Maximum allowed length is {MAX_INPUT_LENGTH} characters."
+
     cache_key = get_cache_key(text, feature)
 
     cached_response = get_cached_response(cache_key)
@@ -118,7 +189,7 @@ def summarizer():
 @app.route('/api/summarize', methods=['POST'])
 def api_summarize():
     """API endpoint for text summarization"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     text = data.get('text', '').strip()
     
     if not text:
@@ -143,7 +214,7 @@ def grammar():
 @app.route('/api/grammar', methods=['POST'])
 def api_grammar():
     """API endpoint for grammar checking"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     text = data.get('text', '').strip()
     
     if not text:
@@ -173,7 +244,7 @@ def ideas():
 @app.route('/api/ideas', methods=['POST'])
 def api_ideas():
     """API endpoint for idea generation"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     topic = data.get('topic', '').strip()
     
     if not topic:
@@ -247,7 +318,7 @@ def build_fake_profile(age=None, gender=None, country=None):
 @app.route('/api/fake-profile', methods=['POST'])
 def api_fake_profile():
     """API endpoint for fake profile generation"""
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     age = data.get('age')
     gender = (data.get('gender') or '').strip().lower()
     country = (data.get('country') or '').strip()
@@ -293,7 +364,7 @@ def api_fake_profile():
 @app.route('/api/todo', methods=['POST'])
 def api_todo():
     """API endpoint for to-do list generation"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     goal = data.get('goal', '').strip()
     
     if not goal:
@@ -331,4 +402,5 @@ if __name__ == '__main__':
         with open(CACHE_FILE, 'w') as f:
             json.dump({}, f)
     
-    app.run(debug=True)
+    flask_debug = os.environ.get('FLASK_DEBUG', 'false').strip().lower() == 'true'
+    app.run(debug=flask_debug)

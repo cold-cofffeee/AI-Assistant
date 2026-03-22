@@ -207,13 +207,47 @@ textarea:focus, input[type="text"]:focus, input[type="number"]:focus, select:foc
     padding: 20px;
     border-radius: 10px;
     border-left: 4px solid #667eea;
-    white-space: pre-wrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     line-height: 1.6;
+}
+
+.result-box h1,
+.result-box h2,
+.result-box h3 {
+    color: #2c3e50;
+    margin: 12px 0 8px;
+}
+
+.result-box p {
+    margin: 8px 0;
+}
+
+.result-box ul,
+.result-box ol {
+    margin: 8px 0 8px 20px;
+}
+
+.result-box code {
+    background: #e9edf3;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.result-box a {
+    color: #4c63d2;
+    text-decoration: underline;
 }
 
 .grammar-result {
     font-family: 'Courier New', monospace;
     font-size: 0.95rem;
+}
+
+.profile-result {
+    white-space: pre-wrap;
 }
 
 /* Ideas grid */

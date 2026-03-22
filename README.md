@@ -11,7 +11,7 @@ A Flask-based web application that provides AI-powered writing tools using Googl
 ## Features
 
 - **Clean, Modern UI**: Simple and user-friendly interface built with HTML, CSS, and JavaScript
-- **AI-Powered**: Uses Google Gemini 2.0 Flash model for intelligent text processing
+- **AI-Powered**: Uses Google Gemini (`gemini-flash-latest` by default) for intelligent text processing
 - **Smart Caching**: 24-hour cache system to reduce API calls and improve performance
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 - **Real-time Interaction**: Dynamic loading states and error handling
@@ -47,17 +47,28 @@ A Flask-based web application that provides AI-powered writing tools using Googl
 
 2. **Install required Python packages**:
    ```bash
-   pip install flask requests faker
+   pip install flask requests faker python-dotenv
    ```
 
-3. **Get your Gemini API key**:
+3. **Create your local environment file**:
+   ```bash
+   # Windows PowerShell
+   Copy-Item .env.example .env
+   ```
+
+4. **Set your API key in `.env`**:
+   ```env
+   GEMINI_API_KEY=your-real-gemini-key
+   GEMINI_MODEL=gemini-flash-latest
+   FLASK_DEBUG=false
+   ```
+
+5. **Get your Gemini API key**:
    - Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
    - Create a new API key
    - Copy the key for the next step
 
-4. **Set up your API key**:
-   
-   **Option A: Environment Variable (Recommended)**
+6. **(Optional) Environment variable setup instead of `.env`**:
    ```bash
    # On Windows
    set GEMINI_API_KEY=your-actual-api-key-here
@@ -65,10 +76,6 @@ A Flask-based web application that provides AI-powered writing tools using Googl
    # On macOS/Linux
    export GEMINI_API_KEY=your-actual-api-key-here
    ```
-   
-   **Option B: Direct in Code**
-   - Open `app.py`
-   - Replace `'your-gemini-api-key-here'` with your actual API key on line 11
 
 ### Running the Application
 
@@ -130,7 +137,7 @@ A Flask-based web application that provides AI-powered writing tools using Googl
 - Cache is stored in `cache.json` file
 
 ### API Integration
-- Uses Google Gemini 2.0 Flash model
+- Uses Google Gemini model endpoint with `X-goog-api-key` header
 - RESTful API endpoints for each feature
 - Proper error handling and user feedback
 - Input validation and sanitization
@@ -179,7 +186,7 @@ README.md           # This file
    - Verify the environment variable is set correctly
 
 2. **Import Errors**:
-   - Make sure Flask, requests, and Faker are installed: `pip install flask requests faker`
+   - Make sure Flask, requests, Faker, and python-dotenv are installed: `pip install flask requests faker python-dotenv`
    - Check Python version compatibility
 
 3. **Cache Issues**:
@@ -192,7 +199,7 @@ README.md           # This file
    - Review firewall settings
 
 ### Debug Mode
-The application runs in debug mode by default. To disable for production:
+Debug mode is controlled by `FLASK_DEBUG` in `.env` (recommended `false` for production):
 ```python
 app.run(debug=False)
 ```
@@ -211,6 +218,14 @@ app.run(debug=False)
 - Use environment variables for sensitive configuration
 - Consider implementing rate limiting for production use
 - Validate and sanitize all user inputs
+
+### Before Hosting on GitHub
+
+- Ensure `.env` is not committed (it's ignored via `.gitignore`)
+- Use `.env.example` as the only committed env template
+- Keep `FLASK_DEBUG=false` for production
+- Rotate API keys immediately if they were ever exposed in commits or screenshots
+- Avoid committing `cache.json` if it may contain sensitive generated content
 
 ## License
 

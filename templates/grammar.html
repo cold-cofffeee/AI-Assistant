@@ -62,9 +62,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Format the suggestions with proper line breaks
-                    const formattedSuggestions = data.suggestions.replace(/\n/g, '<br>');
-                    document.getElementById('grammarResult').innerHTML = formattedSuggestions;
+                    document.getElementById('grammarResult').innerHTML = renderAiOutput(data.suggestions);
                     showOutput();
                 } else {
                     showError(data.error || 'An error occurred');
