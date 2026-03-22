@@ -1,177 +1,141 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart To-Do List - AI Writing Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📆 Smart To-Do List Generator</h1>
-            <nav class="breadcrumb">
-                <a href="/">← Back to Home</a>
-            </nav>
-        </header>
+{% extends 'base.html' %}
 
-        <main class="tool-main">
-            <div class="input-section">
-                <h2>Enter Your Goal</h2>
-                <input type="text" id="goalInput" placeholder="e.g., Study for exams next week, Plan a birthday party, Learn a new skill..." />
-                <button id="generateBtn" class="primary-btn">Generate To-Do List</button>
-            </div>
+{% block title %}Smart To-Do • AI Tool Suite{% endblock %}
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h2>Your Smart To-Do List</h2>
-                <div class="todo-stats" id="todoStats"></div>
-                <div id="todoContainer" class="todo-list"></div>
-                <button id="clearCompleted" class="secondary-btn">Clear Completed Tasks</button>
-            </div>
-
-            <div class="loading" id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Creating your personalized to-do list...</p>
-            </div>
-
-            <div class="error" id="error" style="display: none;"></div>
-        </main>
+{% block content %}
+<section class="max-w-3xl mx-auto space-y-5">
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h1 class="text-2xl font-semibold text-slate-900">Smart To-Do</h1>
+        <p class="text-sm text-slate-500 mt-1">Convert a goal into a structured, actionable plan.</p>
+        <input id="goalInput" type="text" class="mt-5 w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Example: Launch my portfolio website this month" />
+        <button id="generateBtn" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Generate Tasks</button>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        let tasks = [];
+    <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-5 text-sm text-slate-500 flex items-center gap-3">
+        <span class="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-brand-500 animate-spin"></span>
+        <span>Building your task list...</span>
+    </div>
 
-        document.getElementById('generateBtn').addEventListener('click', generateTodoList);
-        document.getElementById('goalInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                generateTodoList();
-            }
-        });
+    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
 
-        document.getElementById('clearCompleted').addEventListener('click', function() {
-            tasks = tasks.filter(task => !task.completed);
-            displayTasks();
-            updateStats();
-        });
+    <div id="outputSection" class="hidden bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <h2 class="text-lg font-semibold text-slate-900">To-Do List</h2>
+            <button id="clearCompleted" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-medium transition duration-200 hover:bg-slate-200">Clear Completed</button>
+        </div>
+        <div id="todoStats" class="mb-4"></div>
+        <div id="todoContainer" class="space-y-3"></div>
+    </div>
+</section>
+{% endblock %}
 
-        async function generateTodoList() {
-            const goal = document.getElementById('goalInput').value.trim();
-            
-            if (!goal) {
-                showError('Please enter a goal to generate a to-do list.');
-                return;
-            }
+{% block scripts %}
+<script>
+    let tasks = [];
+    const goalInput = document.getElementById('goalInput');
+    const generateBtn = document.getElementById('generateBtn');
+    const outputSection = document.getElementById('outputSection');
+    const todoStats = document.getElementById('todoStats');
+    const todoContainer = document.getElementById('todoContainer');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
 
-            showLoading();
-            hideError();
-            hideOutput();
+    generateBtn.addEventListener('click', generateTodoList);
+    goalInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            generateTodoList();
+        }
+    });
 
-            try {
-                const response = await fetch('/api/todo', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ goal: goal })
-                });
+    document.getElementById('clearCompleted').addEventListener('click', () => {
+        tasks = tasks.filter(task => !task.completed);
+        renderTasks();
+        renderStats();
+    });
 
-                const data = await response.json();
-
-                if (response.ok) {
-                    tasks = data.tasks.map((task, index) => ({
-                        id: index,
-                        task: task.task,
-                        time: task.time,
-                        completed: false
-                    }));
-                    displayTasks();
-                    updateStats();
-                    showOutput();
-                } else {
-                    showError(data.error || 'An error occurred');
-                }
-            } catch (error) {
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
+    async function generateTodoList() {
+        const goal = goalInput.value.trim();
+        if (!goal) {
+            error.textContent = 'Please enter a goal first.';
+            error.classList.remove('hidden');
+            return;
         }
 
-        function displayTasks() {
-            const container = document.getElementById('todoContainer');
-            container.innerHTML = '';
+        error.classList.add('hidden');
+        outputSection.classList.add('hidden');
+        loading.classList.remove('hidden');
 
-            tasks.forEach((taskObj) => {
-                const taskItem = document.createElement('div');
-                taskItem.className = `todo-item ${taskObj.completed ? 'completed' : ''}`;
-                taskItem.innerHTML = `
-                    <label class="checkbox-container">
-                        <input type="checkbox" ${taskObj.completed ? 'checked' : ''} 
-                               onchange="toggleTask(${taskObj.id})">
-                        <span class="checkmark"></span>
-                    </label>
-                    <div class="task-content">
-                        <span class="task-text">${taskObj.task}</span>
-                        <span class="task-time">⏱️ ${taskObj.time}</span>
-                    </div>
-                `;
-                container.appendChild(taskItem);
+        try {
+            const response = await fetch('/api/todo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goal })
             });
-        }
+            const data = await response.json();
 
-        function toggleTask(taskId) {
-            const task = tasks.find(t => t.id === taskId);
-            if (task) {
-                task.completed = !task.completed;
-                displayTasks();
-                updateStats();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate tasks');
             }
-        }
 
-        function updateStats() {
-            const completed = tasks.filter(t => t.completed).length;
-            const total = tasks.length;
-            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-            
-            document.getElementById('todoStats').innerHTML = `
-                <div class="stats">
-                    <span class="stat">
-                        <strong>${completed}</strong> of <strong>${total}</strong> tasks completed
-                    </span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${percentage}%"></div>
-                    </div>
-                    <span class="percentage">${percentage}%</span>
+            tasks = data.tasks.map((item, index) => ({
+                id: index,
+                task: item.task,
+                time: item.time,
+                completed: false
+            }));
+
+            renderTasks();
+            renderStats();
+            outputSection.classList.remove('hidden');
+            notify('Tasks generated');
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+            notify('Task generation failed', 'error');
+        } finally {
+            loading.classList.add('hidden');
+        }
+    }
+
+    function renderTasks() {
+        todoContainer.innerHTML = '';
+        tasks.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = `rounded-2xl border ${item.completed ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-slate-50/70'} p-4 flex items-center gap-3`;
+            row.innerHTML = `
+                <input type="checkbox" class="h-4 w-4 rounded border-slate-300 accent-[#4F46E5]" ${item.completed ? 'checked' : ''}>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm ${item.completed ? 'line-through text-slate-400' : 'text-slate-700'}">${item.task}</p>
+                    <p class="text-xs text-slate-400 mt-1">${item.time}</p>
                 </div>
             `;
-        }
 
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
+            row.querySelector('input').addEventListener('change', (event) => {
+                item.completed = event.target.checked;
+                renderTasks();
+                renderStats();
+            });
 
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
+            todoContainer.appendChild(row);
+        });
+    }
 
-        function showOutput() {
-            document.getElementById('outputSection').style.display = 'block';
-        }
+    function renderStats() {
+        const total = tasks.length;
+        const completed = tasks.filter(task => task.completed).length;
+        const percentage = total ? Math.round((completed / total) * 100) : 0;
 
-        function hideOutput() {
-            document.getElementById('outputSection').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+        todoStats.innerHTML = `
+            <div class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                <div class="flex items-center justify-between text-sm text-slate-600 mb-2">
+                    <span>${completed} of ${total} completed</span>
+                    <span class="font-medium text-slate-700">${percentage}%</span>
+                </div>
+                <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div class="h-full bg-emerald-400 transition-all duration-200" style="width: ${percentage}%"></div>
+                </div>
+            </div>
+        `;
+    }
+</script>
+{% endblock %}

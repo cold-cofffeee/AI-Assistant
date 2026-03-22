@@ -1,127 +1,91 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Idea Generator - AI Writing Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>💡 Idea Generator</h1>
-            <nav class="breadcrumb">
-                <a href="/">← Back to Home</a>
-            </nav>
-        </header>
+{% extends 'base.html' %}
 
-        <main class="tool-main">
-            <div class="input-section">
-                <h2>Enter Your Topic</h2>
-                <input type="text" id="topicInput" placeholder="Enter a topic, keyword, or theme..." />
-                <button id="generateBtn" class="primary-btn">Generate Ideas</button>
-            </div>
+{% block title %}Idea Generator • AI Tool Suite{% endblock %}
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h2>Generated Ideas</h2>
-                <div id="ideasContainer" class="ideas-grid"></div>
-            </div>
-
-            <div class="loading" id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating creative ideas...</p>
-            </div>
-
-            <div class="error" id="error" style="display: none;"></div>
-        </main>
+{% block content %}
+<section class="max-w-3xl mx-auto space-y-5">
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h1 class="text-2xl font-semibold text-slate-900">Idea Generator</h1>
+        <p class="text-sm text-slate-500 mt-1">Generate fresh ideas for any topic in seconds.</p>
+        <input id="topicInput" type="text" class="mt-5 w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Enter a topic..." />
+        <button id="generateBtn" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Generate</button>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        document.getElementById('generateBtn').addEventListener('click', generateIdeas);
-        document.getElementById('topicInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                generateIdeas();
-            }
-        });
+    <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-5 text-sm text-slate-500 flex items-center gap-3">
+        <span class="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-brand-500 animate-spin"></span>
+        <span>Generating ideas...</span>
+    </div>
 
-        async function generateIdeas() {
-            const topic = document.getElementById('topicInput').value.trim();
-            
-            if (!topic) {
-                showError('Please enter a topic to generate ideas.');
-                return;
-            }
+    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
 
-            showLoading();
-            hideError();
-            hideOutput();
+    <div id="outputSection" class="hidden bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h2 class="text-lg font-semibold text-slate-900">Ideas</h2>
+        <div id="ideasContainer" class="mt-4 grid gap-3"></div>
+    </div>
+</section>
+{% endblock %}
 
-            try {
-                const response = await fetch('/api/ideas', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ topic: topic })
-                });
+{% block scripts %}
+<script>
+    const topicInput = document.getElementById('topicInput');
+    const generateBtn = document.getElementById('generateBtn');
+    const outputSection = document.getElementById('outputSection');
+    const ideasContainer = document.getElementById('ideasContainer');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
 
-                const data = await response.json();
+    generateBtn.addEventListener('click', generateIdeas);
+    topicInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            generateIdeas();
+        }
+    });
 
-                if (response.ok) {
-                    displayIdeas(data.ideas);
-                    showOutput();
-                } else {
-                    showError(data.error || 'An error occurred');
-                }
-            } catch (error) {
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
+    async function generateIdeas() {
+        const topic = topicInput.value.trim();
+        if (!topic) {
+            error.textContent = 'Please enter a topic.';
+            error.classList.remove('hidden');
+            return;
         }
 
-        function displayIdeas(ideas) {
-            const container = document.getElementById('ideasContainer');
-            container.innerHTML = '';
+        error.classList.add('hidden');
+        outputSection.classList.add('hidden');
+        loading.classList.remove('hidden');
 
-            ideas.forEach((idea, index) => {
-                const ideaCard = document.createElement('div');
-                ideaCard.className = 'idea-card';
-                ideaCard.innerHTML = `
-                    <div class="idea-number">${index + 1}</div>
-                    <h3>${idea.title}</h3>
-                    <p>${idea.description}</p>
-                `;
-                container.appendChild(ideaCard);
+        try {
+            const response = await fetch('/api/ideas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic })
             });
-        }
+            const data = await response.json();
 
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
+            if (!response.ok) {
+                throw new Error(data.error || 'Idea generation failed');
+            }
 
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
+            ideasContainer.innerHTML = '';
+            data.ideas.forEach((idea, index) => {
+                const card = document.createElement('article');
+                card.className = 'rounded-2xl border border-slate-200 bg-slate-50/70 p-4';
+                card.innerHTML = `
+                    <p class="text-xs text-slate-400 font-medium">IDEA ${index + 1}</p>
+                    <h3 class="text-base font-semibold text-slate-900 mt-1">${idea.title}</h3>
+                    <p class="text-sm text-slate-600 mt-2">${idea.description}</p>
+                `;
+                ideasContainer.appendChild(card);
+            });
 
-        function showOutput() {
-            document.getElementById('outputSection').style.display = 'block';
+            outputSection.classList.remove('hidden');
+            notify('Ideas generated');
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+            notify('Generation failed', 'error');
+        } finally {
+            loading.classList.add('hidden');
         }
-
-        function hideOutput() {
-            document.getElementById('outputSection').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+    }
+</script>
+{% endblock %}

@@ -1,104 +1,73 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grammar & Style Checker - AI Writing Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📝 Grammar & Style Checker</h1>
-            <nav class="breadcrumb">
-                <a href="/">← Back to Home</a>
-            </nav>
-        </header>
+{% extends 'base.html' %}
 
-        <main class="tool-main">
-            <div class="input-section">
-                <h2>Enter Your Text</h2>
-                <textarea id="inputText" placeholder="Type or paste your text here to check for grammar and style issues..."></textarea>
-                <button id="checkBtn" class="primary-btn">Check Grammar & Style</button>
-            </div>
+{% block title %}Grammar Checker • AI Tool Suite{% endblock %}
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h2>Suggestions & Corrections</h2>
-                <div id="grammarResult" class="result-box grammar-result"></div>
-            </div>
-
-            <div class="loading" id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Analyzing your text...</p>
-            </div>
-
-            <div class="error" id="error" style="display: none;"></div>
-        </main>
+{% block content %}
+<section class="max-w-3xl mx-auto space-y-5">
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h1 class="text-2xl font-semibold text-slate-900">Grammar Checker</h1>
+        <p class="text-sm text-slate-500 mt-1">Review grammar, spelling, and writing style in one step.</p>
+        <textarea id="inputText" class="mt-5 w-full min-h-[180px] rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Type or paste your text..."></textarea>
+        <button id="checkBtn" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Check</button>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        document.getElementById('checkBtn').addEventListener('click', async function() {
-            const text = document.getElementById('inputText').value.trim();
-            
-            if (!text) {
-                showError('Please enter some text to check.');
-                return;
+    <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-5 text-sm text-slate-500 flex items-center gap-3">
+        <span class="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-brand-500 animate-spin"></span>
+        <span>Analyzing text...</span>
+    </div>
+
+    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
+
+    <div id="outputSection" class="hidden bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h2 class="text-lg font-semibold text-slate-900">Output</h2>
+        <div id="grammarResult" class="mt-4 text-sm text-slate-700 leading-relaxed"></div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const checkBtn = document.getElementById('checkBtn');
+    const inputText = document.getElementById('inputText');
+    const outputSection = document.getElementById('outputSection');
+    const outputResult = document.getElementById('grammarResult');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+
+    checkBtn.addEventListener('click', async () => {
+        const text = inputText.value.trim();
+        if (!text) {
+            error.textContent = 'Please enter text to check.';
+            error.classList.remove('hidden');
+            return;
+        }
+
+        error.classList.add('hidden');
+        outputSection.classList.add('hidden');
+        loading.classList.remove('hidden');
+
+        try {
+            const response = await fetch('/api/grammar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to check grammar');
             }
 
-            showLoading();
-            hideError();
-            hideOutput();
-
-            try {
-                const response = await fetch('/api/grammar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ text: text })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    document.getElementById('grammarResult').innerHTML = renderAiOutput(data.suggestions);
-                    showOutput();
-                } else {
-                    showError(data.error || 'An error occurred');
-                }
-            } catch (error) {
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        });
-
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
+            outputResult.innerHTML = renderAiOutput(data.suggestions);
+            outputSection.classList.remove('hidden');
+            notify('Grammar check complete');
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+            notify('Grammar check failed', 'error');
+        } finally {
+            loading.classList.add('hidden');
         }
-
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
-
-        function showOutput() {
-            document.getElementById('outputSection').style.display = 'block';
-        }
-
-        function hideOutput() {
-            document.getElementById('outputSection').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+    });
+</script>
+{% endblock %}

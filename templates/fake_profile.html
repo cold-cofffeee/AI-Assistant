@@ -1,128 +1,93 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fake Profile Generator - AI Writing Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🧑 Fake Profile Generator</h1>
-            <nav class="breadcrumb">
-                <a href="/">← Back to Home</a>
-            </nav>
-        </header>
+{% extends 'base.html' %}
 
-        <main class="tool-main">
-            <div class="input-section">
-                <h2>Profile Settings</h2>
-                <div class="profile-controls">
-                    <input type="number" id="ageInput" min="1" max="100" placeholder="Age (optional)" />
-                    <select id="genderInput">
-                        <option value="">Any Gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                    </select>
-                    <input type="text" id="countryInput" placeholder="Country (optional)" />
-                    <input type="number" id="countInput" min="1" max="20" value="1" placeholder="Count (1-20)" />
-                </div>
-                <button id="generateBtn" class="primary-btn">Generate Profiles</button>
-            </div>
+{% block title %}Fake Profile Generator • AI Tool Suite{% endblock %}
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h2>Generated Profiles</h2>
-                <div id="profilesContainer" class="profiles-list"></div>
-            </div>
+{% block content %}
+<section class="max-w-4xl mx-auto space-y-5">
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h1 class="text-2xl font-semibold text-slate-900">Fake Profile Generator</h1>
+        <p class="text-sm text-slate-500 mt-1">Create clean mock profiles for testing and demos.</p>
 
-            <div class="loading" id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating fake profiles...</p>
-            </div>
+        <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input id="ageInput" type="number" min="1" max="100" class="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Age (optional)" />
+            <select id="genderInput" class="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition">
+                <option value="">Any gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+            </select>
+            <input id="countryInput" type="text" class="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Country (optional)" />
+            <input id="countInput" type="number" min="1" max="20" value="1" class="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Count" />
+        </div>
 
-            <div class="error" id="error" style="display: none;"></div>
-        </main>
+        <button id="generateBtn" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Generate</button>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        document.getElementById('generateBtn').addEventListener('click', generateProfiles);
+    <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-5 text-sm text-slate-500 flex items-center gap-3">
+        <span class="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-brand-500 animate-spin"></span>
+        <span>Generating profiles...</span>
+    </div>
 
-        async function generateProfiles() {
-            const age = document.getElementById('ageInput').value.trim();
-            const gender = document.getElementById('genderInput').value;
-            const country = document.getElementById('countryInput').value.trim();
-            const count = document.getElementById('countInput').value.trim() || '1';
+    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
 
-            showLoading();
-            hideError();
-            hideOutput();
+    <div id="outputSection" class="hidden bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h2 class="text-lg font-semibold text-slate-900">Profiles</h2>
+        <div id="profilesContainer" class="mt-4 grid gap-3"></div>
+    </div>
+</section>
+{% endblock %}
 
-            try {
-                const response = await fetch('/api/fake-profile', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ age, gender, country, count })
-                });
+{% block scripts %}
+<script>
+    const generateBtn = document.getElementById('generateBtn');
+    const outputSection = document.getElementById('outputSection');
+    const profilesContainer = document.getElementById('profilesContainer');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
 
-                const data = await response.json();
+    generateBtn.addEventListener('click', generateProfiles);
 
-                if (response.ok) {
-                    displayProfiles(data.profiles);
-                    showOutput();
-                } else {
-                    showError(data.error || 'An error occurred');
-                }
-            } catch (error) {
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
+    async function generateProfiles() {
+        const age = document.getElementById('ageInput').value.trim();
+        const gender = document.getElementById('genderInput').value;
+        const country = document.getElementById('countryInput').value.trim();
+        const count = document.getElementById('countInput').value.trim() || '1';
 
-        function displayProfiles(profiles) {
-            const container = document.getElementById('profilesContainer');
-            container.innerHTML = '';
+        error.classList.add('hidden');
+        outputSection.classList.add('hidden');
+        loading.classList.remove('hidden');
 
-            profiles.forEach((profile, index) => {
-                const profileCard = document.createElement('div');
-                profileCard.className = 'profile-card';
-                profileCard.innerHTML = `
-                    <h3>Profile ${index + 1}</h3>
-                    <div class="result-box profile-result">${JSON.stringify(profile, null, 2)}</div>
-                `;
-                container.appendChild(profileCard);
+        try {
+            const response = await fetch('/api/fake-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ age, gender, country, count })
             });
-        }
+            const data = await response.json();
 
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate profiles');
+            }
 
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
+            profilesContainer.innerHTML = '';
+            data.profiles.forEach((profile, index) => {
+                const card = document.createElement('article');
+                card.className = 'rounded-2xl border border-slate-200 bg-slate-50/70 p-4';
+                card.innerHTML = `
+                    <h3 class="text-sm font-semibold text-slate-900 mb-2">Profile ${index + 1}</h3>
+                    <pre class="text-xs text-slate-600 whitespace-pre-wrap">${JSON.stringify(profile, null, 2)}</pre>
+                `;
+                profilesContainer.appendChild(card);
+            });
 
-        function showOutput() {
-            document.getElementById('outputSection').style.display = 'block';
+            outputSection.classList.remove('hidden');
+            notify('Profiles generated');
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+            notify('Generation failed', 'error');
+        } finally {
+            loading.classList.add('hidden');
         }
-
-        function hideOutput() {
-            document.getElementById('outputSection').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+    }
+</script>
+{% endblock %}

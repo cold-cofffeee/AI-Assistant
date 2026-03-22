@@ -1,104 +1,73 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text Summarizer - AI Writing Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🔍 Text Summarizer</h1>
-            <nav class="breadcrumb">
-                <a href="/">← Back to Home</a>
-            </nav>
-        </header>
+{% extends 'base.html' %}
 
-        <main class="tool-main">
-            <div class="input-section">
-                <h2>Enter Your Text</h2>
-                <textarea id="inputText" placeholder="Paste your long article or text here to get a concise summary..."></textarea>
-                <button id="summarizeBtn" class="primary-btn">Summarize Text</button>
-            </div>
+{% block title %}Text Summarizer • AI Tool Suite{% endblock %}
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h2>Summary</h2>
-                <div id="summaryResult" class="result-box"></div>
-            </div>
-
-            <div class="loading" id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating summary...</p>
-            </div>
-
-            <div class="error" id="error" style="display: none;"></div>
-        </main>
+{% block content %}
+<section class="max-w-3xl mx-auto space-y-5">
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h1 class="text-2xl font-semibold text-slate-900">Text Summarizer</h1>
+        <p class="text-sm text-slate-500 mt-1">Paste long text and get a concise summary.</p>
+        <textarea id="inputText" class="mt-5 w-full min-h-[180px] rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 outline-none focus:ring-4 focus:ring-indigo-100 transition" placeholder="Paste your text..."></textarea>
+        <button id="summarizeBtn" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Summarize</button>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        document.getElementById('summarizeBtn').addEventListener('click', async function() {
-            const text = document.getElementById('inputText').value.trim();
-            
-            if (!text) {
-                showError('Please enter some text to summarize.');
-                return;
+    <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-5 text-sm text-slate-500 flex items-center gap-3">
+        <span class="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-brand-500 animate-spin"></span>
+        <span>Generating summary...</span>
+    </div>
+
+    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
+
+    <div id="outputSection" class="hidden bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h2 class="text-lg font-semibold text-slate-900">Output</h2>
+        <div id="summaryResult" class="mt-4 prose prose-slate max-w-none text-sm"></div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const summarizeBtn = document.getElementById('summarizeBtn');
+    const inputText = document.getElementById('inputText');
+    const outputSection = document.getElementById('outputSection');
+    const outputResult = document.getElementById('summaryResult');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+
+    summarizeBtn.addEventListener('click', async () => {
+        const text = inputText.value.trim();
+        if (!text) {
+            error.textContent = 'Please enter text to summarize.';
+            error.classList.remove('hidden');
+            return;
+        }
+
+        error.classList.add('hidden');
+        outputSection.classList.add('hidden');
+        loading.classList.remove('hidden');
+
+        try {
+            const response = await fetch('/api/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to summarize');
             }
 
-            showLoading();
-            hideError();
-            hideOutput();
-
-            try {
-                const response = await fetch('/api/summarize', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ text: text })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    document.getElementById('summaryResult').innerHTML = renderAiOutput(data.summary);
-                    showOutput();
-                } else {
-                    showError(data.error || 'An error occurred');
-                }
-            } catch (error) {
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        });
-
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
+            outputResult.innerHTML = renderAiOutput(data.summary);
+            outputSection.classList.remove('hidden');
+            notify('Summary ready');
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+            notify('Summarization failed', 'error');
+        } finally {
+            loading.classList.add('hidden');
         }
-
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
-
-        function showOutput() {
-            document.getElementById('outputSection').style.display = 'block';
-        }
-
-        function hideOutput() {
-            document.getElementById('outputSection').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+    });
+</script>
+{% endblock %}

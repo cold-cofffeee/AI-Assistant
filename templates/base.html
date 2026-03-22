@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}AI Tool Suite{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#4F46E5',
+                            600: '#4338CA'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    boxShadow: {
+                        soft: '0 8px 24px rgba(15, 23, 42, 0.06)',
+                        softHover: '0 14px 32px rgba(15, 23, 42, 0.10)'
+                    },
+                    borderRadius: {
+                        soft: '16px'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-[#FAFAFA] text-slate-800 font-sans min-h-screen">
+    <header class="sticky top-0 z-30 backdrop-blur bg-[#FAFAFA]/90 border-b border-slate-200/60">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="/" class="text-lg sm:text-xl font-semibold tracking-tight text-slate-900">AI Tool Suite</a>
+            <nav class="flex items-center gap-2 sm:gap-3 text-sm">
+                <a href="/" class="px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white transition duration-200">Home</a>
+                <a href="/#tools" class="px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white transition duration-200">Tools</a>
+                <a href="/processing-history" class="px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white transition duration-200">History</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+        {% block content %}{% endblock %}
+    </main>
+
+    <div id="toast" class="fixed right-4 top-20 z-50 hidden"></div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        function notify(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const isError = type === 'error';
+            toast.className = `fixed right-4 top-20 z-50 rounded-2xl shadow-soft px-4 py-3 text-sm font-medium transition duration-200 ${isError ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`;
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2600);
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

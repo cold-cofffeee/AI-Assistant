@@ -1,148 +1,156 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Compressor - AI Writing Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🎬 Premium Video Compressor</h1>
-            <nav class="breadcrumb">
-                <a href="/">← Back to Home</a>
-            </nav>
-        </header>
+{% extends 'base.html' %}
 
-        <main class="tool-main">
-            <div class="input-section">
-                <h2>Upload Videos</h2>
-                <input type="file" id="videoFiles" accept="video/*" multiple>
+{% block title %}Video Compressor • AI Tool Suite{% endblock %}
 
-                <div class="inline-fields">
-                    <div>
-                        <label for="presetInput">Compression Preset</label>
-                        <select id="presetInput">
-                            <option value="maximum">Maximum Compression</option>
-                            <option value="balanced" selected>Balanced</option>
-                            <option value="fast">Fast Compression</option>
-                        </select>
-                    </div>
-                </div>
+{% block content %}
+<section class="max-w-4xl mx-auto space-y-5">
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h1 class="text-2xl font-semibold text-slate-900">Video Compressor</h1>
+        <p class="text-sm text-slate-500 mt-1">Upload videos, compress with preset quality, download ZIP.</p>
 
-                <button id="compressBtn" class="primary-btn">Compress Videos</button>
-            </div>
+        <label id="dropZone" class="mt-5 block rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-8 text-center cursor-pointer transition duration-200 hover:border-brand-500 hover:bg-indigo-50/40">
+            <input id="videoFiles" type="file" class="hidden" accept="video/*" multiple>
+            <p class="text-sm font-medium text-slate-700">Drag & drop video files here</p>
+            <p class="text-xs text-slate-400 mt-1">or click to browse</p>
+        </label>
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h2>Compression Results</h2>
-                <div id="compressorResult" class="result-box"></div>
-                <a id="downloadLink" class="primary-btn" style="display:none; text-decoration:none; text-align:center;" download>Download ZIP</a>
-            </div>
+        <div class="mt-3 text-xs text-slate-500" id="fileCount">No files selected</div>
 
-            <div class="loading" id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Compressing videos, please wait...</p>
-            </div>
+        <div class="mt-4 max-w-xs">
+            <label for="presetInput" class="text-sm text-slate-600">Preset</label>
+            <select id="presetInput" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 outline-none focus:ring-4 focus:ring-indigo-100 transition text-sm">
+                <option value="maximum">Maximum Compression</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="fast">Fast Compression</option>
+            </select>
+        </div>
 
-            <div class="error" id="error" style="display: none;"></div>
-        </main>
+        <button id="compressBtn" class="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Compress</button>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        document.getElementById('compressBtn').addEventListener('click', compressVideos);
+    <div id="statusCard" class="hidden bg-white rounded-soft shadow-soft p-5">
+        <div class="flex items-center justify-between text-sm text-slate-600">
+            <span id="statusText">Processing...</span>
+            <span id="statusPct">0%</span>
+        </div>
+        <div class="mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-brand-500 transition-all duration-200" style="width: 0%"></div>
+        </div>
+    </div>
 
-        async function compressVideos() {
-            const filesInput = document.getElementById('videoFiles');
-            const preset = document.getElementById('presetInput').value;
-            const files = filesInput.files;
+    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
 
-            if (!files || files.length === 0) {
-                showError('Please select at least one video file.');
-                return;
-            }
+    <div id="outputSection" class="hidden bg-white rounded-soft shadow-soft p-6 sm:p-7">
+        <h2 class="text-lg font-semibold text-slate-900">Output</h2>
+        <div id="compressorResult" class="mt-4 text-sm text-slate-700"></div>
+        <a id="downloadLink" class="hidden mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-medium transition duration-200 hover:bg-emerald-600 hover:scale-[1.02]">Download ZIP</a>
+    </div>
+</section>
+{% endblock %}
 
-            const formData = new FormData();
-            for (const file of files) {
-                formData.append('videos', file);
-            }
-            formData.append('preset', preset);
+{% block scripts %}
+<script>
+    const filesInput = document.getElementById('videoFiles');
+    const dropZone = document.getElementById('dropZone');
+    const compressBtn = document.getElementById('compressBtn');
+    const fileCount = document.getElementById('fileCount');
+    const statusCard = document.getElementById('statusCard');
+    const statusText = document.getElementById('statusText');
+    const statusPct = document.getElementById('statusPct');
+    const progressBar = document.getElementById('progressBar');
+    const error = document.getElementById('error');
+    const outputSection = document.getElementById('outputSection');
+    const result = document.getElementById('compressorResult');
+    const downloadLink = document.getElementById('downloadLink');
 
-            showLoading();
-            hideError();
-            hideOutput();
+    filesInput.addEventListener('change', updateFileCount);
+    compressBtn.addEventListener('click', compressVideos);
 
-            try {
-                const response = await fetch('/api/video-compress', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropZone.classList.add('border-brand-500', 'bg-indigo-50/50');
+        });
+    });
 
-                if (!response.ok) {
-                    showError(data.error || 'Compression failed.');
-                    return;
-                }
+    ['dragleave', 'drop'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('border-brand-500', 'bg-indigo-50/50');
+        });
+    });
 
-                renderResults(data.results, data.message);
-                setDownloadLink(data.download_url);
-                showOutput();
-            } catch (error) {
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
+    dropZone.addEventListener('drop', (event) => {
+        const dt = new DataTransfer();
+        [...event.dataTransfer.files].forEach(file => dt.items.add(file));
+        filesInput.files = dt.files;
+        updateFileCount();
+    });
+
+    function updateFileCount() {
+        fileCount.textContent = filesInput.files.length ? `${filesInput.files.length} file(s) selected` : 'No files selected';
+    }
+
+    async function compressVideos() {
+        if (!filesInput.files.length) {
+            error.textContent = 'Please select video files first.';
+            error.classList.remove('hidden');
+            return;
         }
 
-        function renderResults(results, message) {
-            const result = document.getElementById('compressorResult');
-            let html = `<p><strong>${message}</strong></p><ul>`;
+        const formData = new FormData();
+        [...filesInput.files].forEach(file => formData.append('videos', file));
+        formData.append('preset', document.getElementById('presetInput').value);
 
-            results.forEach(item => {
+        error.classList.add('hidden');
+        outputSection.classList.add('hidden');
+        statusCard.classList.remove('hidden');
+        setProgress(10, 'Processing...');
+
+        let fakeProgress = 10;
+        const timer = setInterval(() => {
+            fakeProgress = Math.min(fakeProgress + 8, 85);
+            setProgress(fakeProgress, 'Processing...');
+        }, 220);
+
+        try {
+            const response = await fetch('/api/video-compress', { method: 'POST', body: formData });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Compression failed');
+            }
+
+            const html = ['<ul class="space-y-2">'];
+            data.results.forEach(item => {
                 if (item.status === 'ok') {
-                    html += `<li><strong>${item.file}</strong> — ${item.original_mb} MB → ${item.compressed_mb} MB (${item.reduction_percent}% saved)</li>`;
+                    html.push(`<li class="rounded-xl border border-slate-200 bg-slate-50/70 p-3"><strong>${item.file}</strong> • ${item.original_mb}MB → ${item.compressed_mb}MB (${item.reduction_percent}% saved)</li>`);
                 } else {
-                    html += `<li><strong>${item.file}</strong> — Error: ${item.message}</li>`;
+                    html.push(`<li class="rounded-xl border border-red-100 bg-red-50 p-3"><strong>${item.file}</strong> • ${item.message}</li>`);
                 }
             });
+            html.push('</ul>');
 
-            html += '</ul>';
-            result.innerHTML = html;
+            result.innerHTML = html.join('');
+            downloadLink.href = data.download_url;
+            downloadLink.classList.remove('hidden');
+            outputSection.classList.remove('hidden');
+            setProgress(100, 'Done');
+            notify('Compression complete');
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('hidden');
+            setProgress(0, 'Failed');
+            notify('Compression failed', 'error');
+        } finally {
+            clearInterval(timer);
         }
+    }
 
-        function setDownloadLink(url) {
-            const link = document.getElementById('downloadLink');
-            link.href = url;
-            link.style.display = 'inline-block';
-        }
-
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
-
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
-
-        function showOutput() {
-            document.getElementById('outputSection').style.display = 'block';
-        }
-
-        function hideOutput() {
-            document.getElementById('outputSection').style.display = 'none';
-            document.getElementById('downloadLink').style.display = 'none';
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+    function setProgress(value, text) {
+        progressBar.style.width = `${value}%`;
+        statusPct.textContent = `${value}%`;
+        statusText.textContent = text;
+    }
+</script>
+{% endblock %}
