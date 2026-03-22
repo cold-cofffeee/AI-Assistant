@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 from faker import Faker
 from werkzeug.utils import secure_filename
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     import cv2
@@ -161,12 +162,12 @@ def create_job_dirs():
     return job_id, job_root, uploads_dir, output_dir
 
 def create_zip_from_directory(source_dir, zip_path):
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for root, _, files in os.walk(source_dir):
             for filename in files:
                 file_path = os.path.join(root, filename)
                 arc_name = os.path.relpath(file_path, source_dir)
-                archive.write(file_path, arc_name)
+                archive.write(file_path, arc_name, compress_type=zipfile.ZIP_DEFLATED)
 
 def load_processing_history():
     try:
@@ -229,18 +230,17 @@ def cleanup_expired_processing_jobs():
         save_processing_history(active_history)
 
 def calculate_frame_similarity(frame_a, frame_b):
+    # Downscale frames for faster SSIM calculation
     gray_a = cv2.cvtColor(frame_a, cv2.COLOR_BGR2GRAY)
     gray_b = cv2.cvtColor(frame_b, cv2.COLOR_BGR2GRAY)
 
-    if gray_a.shape != gray_b.shape:
-        h = min(gray_a.shape[0], gray_b.shape[0])
-        w = min(gray_a.shape[1], gray_b.shape[1])
-        gray_a = cv2.resize(gray_a, (w, h))
-        gray_b = cv2.resize(gray_b, (w, h))
+    # Resize to 320x240 for fast similarity check
+    gray_a = cv2.resize(gray_a, (320, 240))
+    gray_b = cv2.resize(gray_b, (320, 240))
 
     return float(ssim(gray_a, gray_b))
 
-def video_is_static(cap, sample_frames=8, motion_threshold=30):
+def video_is_static(cap, sample_frames=5, motion_threshold=30):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if total_frames < sample_frames + 1:
         return True
@@ -251,7 +251,9 @@ def video_is_static(cap, sample_frames=8, motion_threshold=30):
     if not ok:
         return True
 
+    # Downscale for faster motion detection
     reference_gray = cv2.cvtColor(reference_frame, cv2.COLOR_BGR2GRAY)
+    reference_gray = cv2.resize(reference_gray, (320, 240))
     height, width = reference_gray.shape
     changed_pixel_total = 0
 
@@ -261,6 +263,7 @@ def video_is_static(cap, sample_frames=8, motion_threshold=30):
         if not ok:
             continue
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, (320, 240))
         diff = cv2.absdiff(reference_gray, gray)
         changed_pixel_total += int(np.sum(diff > 10))
 
@@ -502,6 +505,107 @@ def processing_history_page():
     """Processing history page"""
     return render_template('processing_history.html')
 
+# ==================== Video Processing Helper Functions ====================
+
+def compress_video_task(file, uploads_dir, output_dir, ffmpeg_path, preset):
+    """Helper function to compress a single video (for parallel processing)"""
+    if not file or not file.filename or not is_allowed_video(file.filename):
+        return {'file': getattr(file, 'filename', 'unknown'), 'status': 'error', 'message': 'Invalid file'}
+    
+    safe_name = secure_filename(file.filename)
+    input_path = os.path.join(uploads_dir, safe_name)
+    stem = Path(safe_name).stem
+    output_name = f"{stem}_compressed.mp4"
+    output_path = os.path.join(output_dir, output_name)
+    
+    try:
+        file.save(input_path)
+        command = [
+            ffmpeg_path, '-y', '-i', input_path,
+            '-c:v', 'libx265',
+            '-preset', preset['preset'],
+            '-crf', preset['crf'],
+            '-c:a', 'aac', '-b:a', '128k',
+            output_path
+        ]
+        
+        process = subprocess.run(command, capture_output=True, text=True, timeout=300)
+        if process.returncode != 0 or not os.path.exists(output_path):
+            return {'file': safe_name, 'status': 'error', 'message': 'Compression failed'}
+        
+        original_size = os.path.getsize(input_path)
+        compressed_size = os.path.getsize(output_path)
+        reduction = max(0.0, ((original_size - compressed_size) / original_size) * 100) if original_size > 0 else 0.0
+        
+        return {
+            'file': safe_name,
+            'status': 'ok',
+            'original_mb': round(original_size / (1024 * 1024), 2),
+            'compressed_mb': round(compressed_size / (1024 * 1024), 2),
+            'reduction_percent': round(reduction, 2)
+        }
+    except subprocess.TimeoutExpired:
+        return {'file': safe_name, 'status': 'error', 'message': 'Processing timeout'}
+    except Exception as e:
+        return {'file': safe_name, 'status': 'error', 'message': str(e)}
+
+def extract_unique_frames_task(file, uploads_dir, output_dir, similarity_threshold):
+    """Helper function to extract unique frames (for parallel processing)"""
+    if not file or not file.filename or not is_allowed_video(file.filename):
+        return {'file': getattr(file, 'filename', 'unknown'), 'status': 'error', 'message': 'Invalid file'}
+    
+    if not CV_PACKAGES_AVAILABLE:
+        return {'file': file.filename, 'status': 'error', 'message': 'CV not available'}
+    
+    safe_name = secure_filename(file.filename)
+    input_path = os.path.join(uploads_dir, safe_name)
+    
+    try:
+        file.save(input_path)
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            return {'file': safe_name, 'status': 'error', 'message': 'Could not open video'}
+        
+        video_stem = Path(safe_name).stem
+        video_output_dir = os.path.join(output_dir, video_stem)
+        os.makedirs(video_output_dir, exist_ok=True)
+        
+        frame_index = 0
+        saved_count = 0
+        previous_saved = None
+        
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            
+            frame_index += 1
+            if previous_saved is None:
+                saved_count += 1
+                out_path = os.path.join(video_output_dir, f'{video_stem}_{saved_count}.jpg')
+                cv2.imwrite(out_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                previous_saved = frame.copy()
+                continue
+            
+            similarity = calculate_frame_similarity(frame, previous_saved)
+            if similarity < similarity_threshold:
+                saved_count += 1
+                out_path = os.path.join(video_output_dir, f'{video_stem}_{saved_count}.jpg')
+                cv2.imwrite(out_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                previous_saved = frame.copy()
+        
+        cap.release()
+        return {
+            'file': safe_name,
+            'status': 'ok',
+            'frames_saved': saved_count,
+            'threshold': similarity_threshold
+        }
+    except Exception as e:
+        return {'file': safe_name, 'status': 'error', 'message': str(e)}
+
+# ==================== End Helper Functions ====================
+
 def build_fake_profile(age=None, gender=None, country=None):
     """Generate a single fake profile"""
     selected_gender = gender if gender in ['male', 'female'] else random.choice(['male', 'female'])
@@ -580,7 +684,7 @@ def api_fake_profile():
 
 @app.route('/api/video-compress', methods=['POST'])
 def api_video_compress():
-    """Compress uploaded videos using FFmpeg"""
+    """Compress uploaded videos using FFmpeg with parallel processing"""
     ffmpeg_path, ffmpeg_error = resolve_ffmpeg_path()
     if not ffmpeg_path:
         return jsonify({'error': ffmpeg_error}), 400
@@ -591,57 +695,32 @@ def api_video_compress():
 
     preset_name = (request.form.get('preset') or 'balanced').strip().lower()
     preset_map = {
-        'maximum': {'crf': '28', 'preset': 'slow'},
-        'balanced': {'crf': '23', 'preset': 'medium'},
-        'fast': {'crf': '20', 'preset': 'fast'}
+        'maximum': {'crf': '25', 'preset': 'slower'},
+        'balanced': {'crf': '22', 'preset': 'faster'},
+        'fast': {'crf': '18', 'preset': 'veryfast'}
     }
     selected_preset = preset_map.get(preset_name, preset_map['balanced'])
 
     job_id, _, uploads_dir, output_dir = create_job_dirs()
 
+    # Use parallel processing for faster compression
+    max_workers = min(4, len(files))  # Max 4 concurrent compressions
     results = []
     compressed_count = 0
 
-    for file in files:
-        if not file or not file.filename:
-            continue
-        if not is_allowed_video(file.filename):
-            results.append({'file': file.filename, 'status': 'error', 'message': 'Unsupported video format'})
-            continue
-
-        safe_name = secure_filename(file.filename)
-        input_path = os.path.join(uploads_dir, safe_name)
-        stem = Path(safe_name).stem
-        output_name = f"{stem}_compressed.mp4"
-        output_path = os.path.join(output_dir, output_name)
-        file.save(input_path)
-
-        command = [
-            ffmpeg_path, '-y', '-i', input_path,
-            '-c:v', 'libx265',
-            '-preset', selected_preset['preset'],
-            '-crf', selected_preset['crf'],
-            '-c:a', 'aac', '-b:a', '128k',
-            output_path
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(compress_video_task, file, uploads_dir, output_dir, ffmpeg_path, selected_preset)
+            for file in files
         ]
-
-        process = subprocess.run(command, capture_output=True, text=True)
-        if process.returncode != 0 or not os.path.exists(output_path):
-            results.append({'file': safe_name, 'status': 'error', 'message': 'Compression failed'})
-            continue
-
-        original_size = os.path.getsize(input_path)
-        compressed_size = os.path.getsize(output_path)
-        reduction = max(0.0, ((original_size - compressed_size) / original_size) * 100) if original_size > 0 else 0.0
-
-        compressed_count += 1
-        results.append({
-            'file': safe_name,
-            'status': 'ok',
-            'original_mb': round(original_size / (1024 * 1024), 2),
-            'compressed_mb': round(compressed_size / (1024 * 1024), 2),
-            'reduction_percent': round(reduction, 2)
-        })
+        for future in futures:
+            try:
+                result = future.result(timeout=300)
+                results.append(result)
+                if result.get('status') == 'ok':
+                    compressed_count += 1
+            except Exception as e:
+                results.append({'status': 'error', 'message': str(e)})
 
     if compressed_count == 0:
         return jsonify({'error': 'No files were compressed successfully', 'results': results}), 400
@@ -658,7 +737,7 @@ def api_video_compress():
 
 @app.route('/api/frame-extract-unique', methods=['POST'])
 def api_frame_extract_unique():
-    """Extract only unique frames using SSIM similarity check"""
+    """Extract only unique frames using SSIM similarity check with parallel processing"""
     if not CV_PACKAGES_AVAILABLE:
         return jsonify({'error': 'opencv-python, scikit-image, and numpy are required for this tool.'}), 400
 
@@ -679,58 +758,21 @@ def api_frame_extract_unique():
     summary = []
     processed = 0
 
-    for file in files:
-        if not file or not file.filename:
-            continue
-        if not is_allowed_video(file.filename):
-            summary.append({'file': file.filename, 'status': 'error', 'message': 'Unsupported video format'})
-            continue
-
-        safe_name = secure_filename(file.filename)
-        input_path = os.path.join(uploads_dir, safe_name)
-        file.save(input_path)
-
-        cap = cv2.VideoCapture(input_path)
-        if not cap.isOpened():
-            summary.append({'file': safe_name, 'status': 'error', 'message': 'Could not open video'})
-            continue
-
-        video_stem = Path(safe_name).stem
-        video_output_dir = os.path.join(output_dir, video_stem)
-        os.makedirs(video_output_dir, exist_ok=True)
-
-        frame_index = 0
-        saved_count = 0
-        previous_saved = None
-
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-
-            frame_index += 1
-            if previous_saved is None:
-                saved_count += 1
-                out_path = os.path.join(video_output_dir, f'{video_stem}_{saved_count}.png')
-                cv2.imwrite(out_path, frame)
-                previous_saved = frame.copy()
-                continue
-
-            similarity = calculate_frame_similarity(frame, previous_saved)
-            if similarity < similarity_threshold:
-                saved_count += 1
-                out_path = os.path.join(video_output_dir, f'{video_stem}_{saved_count}.png')
-                cv2.imwrite(out_path, frame)
-                previous_saved = frame.copy()
-
-        cap.release()
-        processed += 1
-        summary.append({
-            'file': safe_name,
-            'status': 'ok',
-            'frames_saved': saved_count,
-            'threshold': similarity_threshold
-        })
+    # Use parallel processing for faster extraction
+    max_workers = min(2, len(files))  # Max 2 concurrent extractions
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(extract_unique_frames_task, file, uploads_dir, output_dir, similarity_threshold)
+            for file in files
+        ]
+        for future in futures:
+            try:
+                result = future.result(timeout=600)
+                summary.append(result)
+                if result.get('status') == 'ok':
+                    processed += 1
+            except Exception as e:
+                summary.append({'status': 'error', 'message': str(e)})
 
     if processed == 0:
         return jsonify({'error': 'No videos were processed successfully', 'results': summary}), 400

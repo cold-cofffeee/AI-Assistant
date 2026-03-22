@@ -3,25 +3,34 @@
 {% block title %}Processing History • AI Tool Suite{% endblock %}
 
 {% block content %}
-<section class="max-w-4xl mx-auto space-y-5">
-    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-7">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <div>
-                <h1 class="text-2xl font-semibold text-slate-900">Processing History</h1>
-                <p id="retentionInfo" class="text-sm text-slate-500 mt-1">Files expire in 60 minutes.</p>
+<section class="max-w-4xl mx-auto">
+    <!-- Header Card -->
+    <div class="bg-white rounded-soft shadow-soft p-6 sm:p-8 mb-5">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div class="flex-1">
+                <h1 class="text-3xl font-bold text-slate-900">Processing History</h1>
+                <p id="retentionInfo" class="text-sm text-slate-500 mt-2">Recent processing jobs. Files expire after 60 minutes.</p>
             </div>
-            <button id="clearHistoryBtn" class="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-red-50 text-red-700 text-sm font-medium transition duration-200 hover:bg-red-100">Delete all history now</button>
+            <button 
+                id="clearHistoryBtn" 
+                class="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-red-50 text-red-700 text-sm font-semibold transition duration-200 hover:bg-red-100 active:scale-95 whitespace-nowrap"
+                title="Permanently delete all history and downloaded files">
+                🗑️ Clear All
+            </button>
+        </div>
+    </div>
+
+    <!-- History Container -->
+    <div class="space-y-3">
+        <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-6 flex items-center justify-center gap-3">
+            <span class="w-5 h-5 rounded-full border-2 border-slate-200 border-t-brand-500 animate-spin"></span>
+            <span class="text-sm text-slate-600">Loading your processing history...</span>
         </div>
 
-        <div id="historyContainer" class="space-y-3"></div>
-    </div>
+        <div id="error" class="hidden bg-red-50 border border-red-200 text-red-800 rounded-soft p-5 text-sm font-medium"></div>
 
-    <div id="loading" class="hidden bg-white rounded-soft shadow-soft p-5 text-sm text-slate-500 flex items-center gap-3">
-        <span class="w-4 h-4 rounded-full border-2 border-indigo-200 border-t-brand-500 animate-spin"></span>
-        <span>Loading history...</span>
+        <div id="historyContainer"></div>
     </div>
-
-    <div id="error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-soft p-4 text-sm"></div>
 </section>
 {% endblock %}
 
@@ -32,6 +41,18 @@
     const clearHistoryBtn = document.getElementById('clearHistoryBtn');
     const loading = document.getElementById('loading');
     const error = document.getElementById('error');
+
+    // Tool display names and colors
+    const toolConfigs = {
+        'video-compressor': { name: '🎬 Video Compressor', color: 'brand' },
+        'frame-extractor-unique': { name: '🎞️ Unique Frame Extractor', color: 'brand' },
+        'frame-extractor-motion': { name: '⚡ Motion Frame Extractor', color: 'brand' },
+        'summarizer': { name: '📝 Text Summarizer', color: 'brand' },
+        'grammar': { name: '✏️ Grammar Checker', color: 'brand' },
+        'ideas': { name: '💡 Idea Generator', color: 'brand' },
+        'todo': { name: '✅ Todo Generator', color: 'brand' },
+        'fake-profile': { name: '👤 Fake Profile Generator', color: 'brand' }
+    };
 
     document.addEventListener('DOMContentLoaded', loadHistory);
     clearHistoryBtn.addEventListener('click', clearHistoryNow);
@@ -48,11 +69,13 @@
                 throw new Error(data.error || 'Failed to load history');
             }
 
-            retentionInfo.textContent = `Files expire in ${data.retention_minutes} minutes.`;
+            const minutes = data.retention_minutes || 60;
+            retentionInfo.textContent = `Recent processing jobs. Files expire after ${minutes} minute${minutes !== 1 ? 's' : ''}.`;
             renderHistory(data.items || []);
         } catch (err) {
             error.textContent = err.message;
             error.classList.remove('hidden');
+            console.error(err);
         } finally {
             loading.classList.add('hidden');
         }
@@ -63,9 +86,9 @@
 
         if (!items.length) {
             historyContainer.innerHTML = `
-                <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-8 text-center">
-                    <p class="text-sm font-medium text-slate-700">No history yet</p>
-                    <p class="text-xs text-slate-400 mt-1">Processed files will appear here automatically.</p>
+                <div class="rounded-lg border border-slate-200 bg-slate-50/60 p-10 text-center">
+                    <p class="text-base font-medium text-slate-700">📭 No history yet</p>
+                    <p class="text-sm text-slate-500 mt-2">Your processing jobs will appear here automatically.</p>
                 </div>
             `;
             return;
@@ -73,15 +96,27 @@
 
         items.forEach((item) => {
             const created = new Date(item.created_at).toLocaleString();
+            const config = toolConfigs[item.tool] || { name: item.tool, color: 'slate' };
+            const fileText = item.total_files === 1 ? 'file' : 'files';
+            
             const card = document.createElement('article');
-            card.className = 'rounded-2xl border border-slate-200 bg-slate-50/70 p-4';
+            card.className = 'bg-white rounded-lg border border-slate-200 shadow-soft p-5 transition-all duration-200 hover:shadow-softHover hover:border-slate-300 active:scale-95';
             card.innerHTML = `
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
-                        <p class="text-sm font-semibold text-slate-900">${item.tool}</p>
-                        <p class="text-xs text-slate-500 mt-1">${item.successful_files}/${item.total_files} file(s) • ${created}</p>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-slate-900 truncate">${config.name}</p>
+                        <p class="text-xs text-slate-500 mt-1">
+                            <span class="inline-block">${item.successful_files}/${item.total_files} ${fileText} processed</span>
+                            <span class="mx-2 text-slate-400">•</span>
+                            <span class="inline-block">${created}</span>
+                        </p>
                     </div>
-                    <a href="${item.download_url}" class="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-brand-500 text-white text-xs font-medium transition duration-200 hover:bg-brand-600 hover:scale-[1.02]">Download ZIP</a>
+                    <a 
+                        href="${item.download_url}" 
+                        class="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-brand-500 text-white text-xs font-semibold transition-all duration-200 hover:bg-brand-600 hover:scale-105 active:scale-95 whitespace-nowrap"
+                        download>
+                        ⬇️ Download
+                    </a>
                 </div>
             `;
             historyContainer.appendChild(card);
@@ -89,7 +124,7 @@
     }
 
     async function clearHistoryNow() {
-        const confirmed = confirm('This will permanently delete all processing history and ZIP files. Continue?');
+        const confirmed = confirm('⚠️ This will permanently delete all processing history and ZIP files. This cannot be undone. Continue?');
         if (!confirmed) {
             return;
         }
@@ -100,16 +135,18 @@
         try {
             const response = await fetch('/api/processing-history', { method: 'DELETE' });
             const data = await response.json();
+            
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to clear history');
             }
 
+            notify('✓ Processing history cleared successfully', 'success');
             renderHistory([]);
-            notify(data.message || 'Processing history cleared');
         } catch (err) {
-            error.textContent = err.message;
+            error.textContent = `❌ ${err.message}`;
             error.classList.remove('hidden');
             notify('Failed to clear history', 'error');
+            console.error(err);
         } finally {
             loading.classList.add('hidden');
         }
