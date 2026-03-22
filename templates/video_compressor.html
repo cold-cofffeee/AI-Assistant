@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Compressor - AI Writing Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 Premium Video Compressor</h1>
+            <nav class="breadcrumb">
+                <a href="/">← Back to Home</a>
+            </nav>
+        </header>
+
+        <main class="tool-main">
+            <div class="input-section">
+                <h2>Upload Videos</h2>
+                <input type="file" id="videoFiles" accept="video/*" multiple>
+
+                <div class="inline-fields">
+                    <div>
+                        <label for="presetInput">Compression Preset</label>
+                        <select id="presetInput">
+                            <option value="maximum">Maximum Compression</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="fast">Fast Compression</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button id="compressBtn" class="primary-btn">Compress Videos</button>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h2>Compression Results</h2>
+                <div id="compressorResult" class="result-box"></div>
+                <a id="downloadLink" class="primary-btn" style="display:none; text-decoration:none; text-align:center;" download>Download ZIP</a>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Compressing videos, please wait...</p>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.getElementById('compressBtn').addEventListener('click', compressVideos);
+
+        async function compressVideos() {
+            const filesInput = document.getElementById('videoFiles');
+            const preset = document.getElementById('presetInput').value;
+            const files = filesInput.files;
+
+            if (!files || files.length === 0) {
+                showError('Please select at least one video file.');
+                return;
+            }
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('videos', file);
+            }
+            formData.append('preset', preset);
+
+            showLoading();
+            hideError();
+            hideOutput();
+
+            try {
+                const response = await fetch('/api/video-compress', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showError(data.error || 'Compression failed.');
+                    return;
+                }
+
+                renderResults(data.results, data.message);
+                setDownloadLink(data.download_url);
+                showOutput();
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderResults(results, message) {
+            const result = document.getElementById('compressorResult');
+            let html = `<p><strong>${message}</strong></p><ul>`;
+
+            results.forEach(item => {
+                if (item.status === 'ok') {
+                    html += `<li><strong>${item.file}</strong> — ${item.original_mb} MB → ${item.compressed_mb} MB (${item.reduction_percent}% saved)</li>`;
+                } else {
+                    html += `<li><strong>${item.file}</strong> — Error: ${item.message}</li>`;
+                }
+            });
+
+            html += '</ul>';
+            result.innerHTML = html;
+        }
+
+        function setDownloadLink(url) {
+            const link = document.getElementById('downloadLink');
+            link.href = url;
+            link.style.display = 'inline-block';
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showOutput() {
+            document.getElementById('outputSection').style.display = 'block';
+        }
+
+        function hideOutput() {
+            document.getElementById('outputSection').style.display = 'none';
+            document.getElementById('downloadLink').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

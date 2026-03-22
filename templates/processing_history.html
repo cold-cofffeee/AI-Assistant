@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing History - AI Tool Suite</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🕘 Processing History</h1>
+            <nav class="breadcrumb">
+                <a href="/">← Back to Home</a>
+            </nav>
+        </header>
+
+        <main class="tool-main">
+            <div class="output-section">
+                <h2>Recent Processing Jobs</h2>
+                <p id="retentionInfo" class="muted-text"></p>
+                <button id="clearHistoryBtn" class="danger-btn">Delete All History Now</button>
+                <div id="historyContainer" class="history-list"></div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Loading history...</p>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', loadHistory);
+        document.getElementById('clearHistoryBtn').addEventListener('click', clearHistoryNow);
+
+        async function loadHistory() {
+            showLoading();
+            hideError();
+
+            try {
+                const response = await fetch('/api/processing-history');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showError(data.error || 'Failed to load history.');
+                    return;
+                }
+
+                document.getElementById('retentionInfo').textContent = `Downloads remain available for ${data.retention_minutes} minute(s).`;
+                renderHistory(data.items || []);
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderHistory(items) {
+            const container = document.getElementById('historyContainer');
+            container.innerHTML = '';
+
+            if (items.length === 0) {
+                container.innerHTML = '<div class="result-box"><p>No active processing history found yet.</p></div>';
+                return;
+            }
+
+            items.forEach(item => {
+                const created = new Date(item.created_at);
+                const expires = new Date(item.expires_at);
+
+                const card = document.createElement('div');
+                card.className = 'history-item';
+                card.innerHTML = `
+                    <div class="history-item-header">
+                        <h3>${item.tool}</h3>
+                        <a class="primary-btn" href="${item.download_url}" download>Download ZIP</a>
+                    </div>
+                    <div class="result-box">
+                        <p><strong>Job ID:</strong> ${item.job_id}</p>
+                        <p><strong>Files:</strong> ${item.successful_files}/${item.total_files} successful</p>
+                        <p><strong>Created:</strong> ${created.toLocaleString()}</p>
+                        <p><strong>Expires:</strong> ${expires.toLocaleString()}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function clearHistoryNow() {
+            const confirmed = confirm('This will permanently delete all processing history and generated ZIP files. Continue?');
+            if (!confirmed) {
+                return;
+            }
+
+            showLoading();
+            hideError();
+
+            try {
+                const response = await fetch('/api/processing-history', {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showError(data.error || 'Failed to clear history.');
+                    return;
+                }
+
+                showToast(data.message || 'Processing history cleared.');
+                renderHistory([]);
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

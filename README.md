@@ -1,12 +1,16 @@
-# AI Writing Assistant
+# AI Tool Suite
 
-A Flask-based web application that provides AI-powered writing tools using Google's Gemini API, plus a fake profile generator:
+A Flask-based web application that combines AI writing/productivity tools with video processing utilities:
 
 - 🔍 **Text Summarizer**: Condense long articles into concise summaries
 - 📝 **Grammar & Style Checker**: Get AI-powered writing improvement suggestions
 - 💡 **Idea Generator**: Generate creative ideas for any topic
 - 📆 **Smart To-Do List**: Create structured task lists with time estimates
 - 🧑 **Fake Profile Generator**: Generate realistic mock user profiles for testing and demos
+- 🎬 **Premium Video Compressor**: Compress one or more videos with FFmpeg presets and ZIP download
+- 🖼️ **Unique Frame Extractor**: Extract only visually distinct frames using SSIM thresholding
+- 📽️ **Motion Frame Extractor**: Detect static/dynamic videos and extract representative/interval frames
+- 🕘 **Processing History**: View recent processing jobs and re-download ZIP outputs before expiry
 
 ## Features
 
@@ -17,6 +21,7 @@ A Flask-based web application that provides AI-powered writing tools using Googl
 - **Real-time Interaction**: Dynamic loading states and error handling
 - **Interactive To-Do Lists**: Checkboxes with progress tracking
 - **Fake Data Generation**: Configurable profile generation by age, gender, country, and count
+- **Video Processing**: Multi-file upload, processing summary, and ZIP result downloads
 
 ## Setup Instructions
 
@@ -37,7 +42,10 @@ A Flask-based web application that provides AI-powered writing tools using Googl
    │   ├── grammar.html
    │   ├── ideas.html
    │   ├── todo.html
-   │   └── fake_profile.html
+   │   ├── fake_profile.html
+   │   ├── video_compressor.html
+   │   ├── frame_extractor_unique.html
+   │   └── frame_extractor_motion.html
    ├── static/
    │   ├── style.css
    │   └── script.js
@@ -47,28 +55,33 @@ A Flask-based web application that provides AI-powered writing tools using Googl
 
 2. **Install required Python packages**:
    ```bash
-   pip install flask requests faker python-dotenv
+   pip install flask requests faker python-dotenv opencv-python scikit-image numpy
    ```
 
-3. **Create your local environment file**:
+3. **Install FFmpeg** (required for video compression):
+   - Download from https://ffmpeg.org/download.html and add to PATH
+   - Or use package manager (e.g., `choco install ffmpeg` on Windows)
+
+4. **Create your local environment file**:
    ```bash
    # Windows PowerShell
    Copy-Item .env.example .env
    ```
 
-4. **Set your API key in `.env`**:
+5. **Set your API key in `.env`**:
    ```env
    GEMINI_API_KEY=your-real-gemini-key
    GEMINI_MODEL=gemini-flash-latest
    FLASK_DEBUG=false
+   PROCESSING_RETENTION_MINUTES=60
    ```
 
-5. **Get your Gemini API key**:
+6. **Get your Gemini API key**:
    - Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
    - Create a new API key
    - Copy the key for the next step
 
-6. **(Optional) Environment variable setup instead of `.env`**:
+7. **(Optional) Environment variable setup instead of `.env`**:
    ```bash
    # On Windows
    set GEMINI_API_KEY=your-actual-api-key-here
@@ -128,6 +141,29 @@ A Flask-based web application that provides AI-powered writing tools using Googl
 4. Click "Generate Profiles"
 5. Review the generated profile objects
 
+### Premium Video Compressor
+1. Open the video compressor page
+2. Upload one or more videos
+3. Choose preset (Maximum / Balanced / Fast)
+4. Run compression and download ZIP results
+
+### Unique Frame Extractor
+1. Open unique frame extractor
+2. Upload videos and set similarity threshold
+3. Extract visually unique frames
+4. Download ZIP containing extracted PNG files
+
+### Motion Frame Extractor
+1. Open motion frame extractor
+2. Upload videos and set motion threshold + frame interval
+3. Process static/dynamic detection and extraction
+4. Download ZIP containing extracted JPG files
+
+### Processing History
+1. Open Processing History from the home page
+2. Review recent video-processing jobs
+3. Download ZIP outputs before their retention window expires
+
 ## Technical Details
 
 ### Caching System
@@ -151,7 +187,10 @@ templates/          # HTML templates
 ├── grammar.html    # Grammar checker interface
 ├── ideas.html      # Idea generator interface
 ├── todo.html       # To-do list generator interface
-└── fake_profile.html # Fake profile generator interface
+├── fake_profile.html # Fake profile generator interface
+├── video_compressor.html # Video compression interface
+├── frame_extractor_unique.html # SSIM-based frame extraction interface
+└── frame_extractor_motion.html # Motion-based frame extraction interface
 static/             # Static assets
 ├── style.css       # Main stylesheet
 └── script.js       # JavaScript utilities
@@ -186,14 +225,23 @@ README.md           # This file
    - Verify the environment variable is set correctly
 
 2. **Import Errors**:
-   - Make sure Flask, requests, Faker, and python-dotenv are installed: `pip install flask requests faker python-dotenv`
+   - Make sure all dependencies are installed: `pip install flask requests faker python-dotenv opencv-python scikit-image numpy`
    - Check Python version compatibility
 
-3. **Cache Issues**:
+3. **FFmpeg Errors (Video Compressor)**:
+   - Install FFmpeg and ensure `ffmpeg` works from terminal
+   - Verify FFmpeg is added to your PATH
+
+4. **Missing Processing History Entries**:
+   - History includes only successful video processing jobs
+   - Items auto-expire based on `PROCESSING_RETENTION_MINUTES`
+   - Expired job folders and links are cleaned up automatically
+
+5. **Cache Issues**:
    - Delete `cache.json` and restart the application
    - Check file permissions for cache.json
 
-4. **Network Errors**:
+6. **Network Errors**:
    - Verify internet connection
    - Check if Gemini API is accessible from your network
    - Review firewall settings

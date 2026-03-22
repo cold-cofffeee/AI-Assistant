@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Writing Assistant</title>
+    <title>AI Tool Suite</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🤖 AI Writing Assistant</h1>
-            <p>Your intelligent companion for writing, grammar, ideas, and productivity</p>
+            <h1>🤖 AI Tool Suite</h1>
+            <p>Your all-in-one workspace for writing, productivity, and video processing</p>
         </header>
 
         <nav class="feature-nav">
@@ -42,6 +42,30 @@
                 <div class="feature-icon">🧑</div>
                 <h3>Fake Profile Generator</h3>
                 <p>Generate realistic mock user profiles for demos, testing, and prototyping</p>
+            </a>
+
+            <a href="/video-compressor" class="feature-card">
+                <div class="feature-icon">🎬</div>
+                <h3>Premium Video Compressor</h3>
+                <p>Compress videos with FFmpeg presets and download optimized output in one ZIP</p>
+            </a>
+
+            <a href="/frame-extractor-unique" class="feature-card">
+                <div class="feature-icon">🖼️</div>
+                <h3>Unique Frame Extractor</h3>
+                <p>Extract only visually unique frames using SSIM similarity filtering</p>
+            </a>
+
+            <a href="/frame-extractor-motion" class="feature-card">
+                <div class="feature-icon">📽️</div>
+                <h3>Motion Frame Extractor</h3>
+                <p>Detect static vs dynamic videos and extract representative or interval frames</p>
+            </a>
+
+            <a href="/processing-history" class="feature-card">
+                <div class="feature-icon">🕘</div>
+                <h3>Processing History</h3>
+                <p>See recent processing jobs and download result ZIP files before they expire</p>
             </a>
         </nav>
 
