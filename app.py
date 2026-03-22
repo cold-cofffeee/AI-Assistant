@@ -68,6 +68,7 @@ VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m
 VIDEO_MAX_UPLOAD_MB = int(os.environ.get('VIDEO_MAX_UPLOAD_MB', '500'))
 PROCESSING_RETENTION_MINUTES = int(os.environ.get('PROCESSING_RETENTION_MINUTES', '60'))
 PROCESSING_HISTORY_FILE = os.path.join(PROCESSING_ROOT, 'history.json')
+FFMPEG_PATH_ENV = os.environ.get('FFMPEG_PATH', '').strip()
 
 app.config['MAX_CONTENT_LENGTH'] = VIDEO_MAX_UPLOAD_MB * 1024 * 1024
 app.config['JSON_SORT_KEYS'] = False
@@ -97,6 +98,57 @@ def internal_server_error(_error):
 
 def is_allowed_video(filename):
     return Path(filename).suffix.lower() in VIDEO_EXTENSIONS
+
+def get_ffmpeg_binary_name():
+    return 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg'
+
+def normalize_ffmpeg_path(candidate_path):
+    if not candidate_path:
+        return None
+
+    normalized = os.path.expandvars(os.path.expanduser(candidate_path))
+    if os.path.isdir(normalized):
+        normalized = os.path.join(normalized, get_ffmpeg_binary_name())
+
+    if os.path.isfile(normalized):
+        return normalized
+
+    return None
+
+def resolve_ffmpeg_path():
+    binary_name = get_ffmpeg_binary_name()
+
+    env_candidate = normalize_ffmpeg_path(FFMPEG_PATH_ENV)
+    if env_candidate:
+        return env_candidate, None
+
+    project_root = Path(__file__).resolve().parent
+    local_candidates = [
+        project_root / 'bin' / binary_name,
+        project_root / 'ffmpeg' / 'bin' / binary_name,
+        project_root / 'ffmpeg' / binary_name
+    ]
+    for candidate in local_candidates:
+        if candidate.is_file():
+            return str(candidate), None
+
+    path_candidate = shutil.which('ffmpeg')
+    if path_candidate:
+        return path_candidate, None
+
+    try:
+        import imageio_ffmpeg
+        auto_binary = imageio_ffmpeg.get_ffmpeg_exe()
+        if auto_binary and os.path.isfile(auto_binary):
+            return auto_binary, None
+    except Exception:
+        pass
+
+    install_help = (
+        'FFmpeg not found. Set FFMPEG_PATH in .env, place ffmpeg in ./bin or ./ffmpeg/bin, '
+        'or install system-wide (Windows: choco install ffmpeg, Ubuntu: apt install ffmpeg).'
+    )
+    return None, install_help
 
 def create_job_dirs():
     cleanup_expired_processing_jobs()
@@ -529,8 +581,9 @@ def api_fake_profile():
 @app.route('/api/video-compress', methods=['POST'])
 def api_video_compress():
     """Compress uploaded videos using FFmpeg"""
-    if shutil.which('ffmpeg') is None:
-        return jsonify({'error': 'FFmpeg not found. Install FFmpeg and add it to your PATH.'}), 400
+    ffmpeg_path, ffmpeg_error = resolve_ffmpeg_path()
+    if not ffmpeg_path:
+        return jsonify({'error': ffmpeg_error}), 400
 
     files = request.files.getlist('videos')
     if not files:
@@ -564,7 +617,7 @@ def api_video_compress():
         file.save(input_path)
 
         command = [
-            'ffmpeg', '-y', '-i', input_path,
+            ffmpeg_path, '-y', '-i', input_path,
             '-c:v', 'libx265',
             '-preset', selected_preset['preset'],
             '-crf', selected_preset['crf'],
